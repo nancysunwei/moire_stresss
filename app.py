@@ -2,6 +2,9 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
+# 设置中文字体
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 替换为系统中存在的中文字体，如微软雅黑、宋体等
+plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示为方块的问题
 
 # ==========================================
 # 1. 页面配置与空天教学情境导入
@@ -109,3 +112,4 @@ with col_data1:
 with col_data2:
     st.subheader("⚠️ 结构安全边界")
     st.error(f"**第一主应力 (σ1)**: {sigma_1:.2f} MPa\n\n**第三主应力 (σ3)**: {sigma_2:.2f} MPa\n\n**最大切应力 (τmax)**: {tau_max:.2f} MPa")
+
