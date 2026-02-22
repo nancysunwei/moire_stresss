@@ -1,15 +1,12 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 import sympy as sp
-# 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei']  # 替换为系统中存在的中文字体，如微软雅黑、宋体等
-plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示为方块的问题
+import plotly.graph_objects as go
 
 # ==========================================
 # 1. 页面配置与空天教学情境导入
 # ==========================================
-# 将布局改为 centered，在手机竖屏下显示更集中、更美观
+# 手机端竖屏友好布局
 st.set_page_config(page_title="数智力学交互学案", layout="centered") 
 
 st.title("🚀 空天构件复杂应力状态分析系统")
@@ -19,12 +16,12 @@ st.markdown("""
 """)
 
 # ==========================================
-# 2. 交互控制区 (优化为全平台直观显示，完美适配手机扫码)
+# 2. 交互控制区 (全平台直观显示，完美适配手机扫码)
 # ==========================================
 st.header("⚙️ 动态参数调节区")
 st.caption("单位：MPa (兆帕)")
 
-# 摒弃隐藏的侧边栏，使用主页面的列布局，让滑动条在手机上直接可见
+# 摒弃隐藏的侧边栏，使用主页面的列布局
 col_input1, col_input2 = st.columns(2)
 
 with col_input1:
@@ -41,7 +38,6 @@ st.divider()
 # ==========================================
 # 3. 后端引擎：基于 SymPy 的数理推导 (强推导体现)
 # ==========================================
-# 预先进行符号推导，保证底层逻辑的严密性
 sx, sy, txy, alpha = sp.symbols('sigma_x sigma_y tau_xy alpha')
 eq_sigma = (sx + sy)/2 + (sx - sy)/2 * sp.cos(2*alpha) - txy * sp.sin(2*alpha)
 eq_tau = (sx - sy)/2 * sp.sin(2*alpha) + txy * sp.cos(2*alpha)
@@ -49,11 +45,9 @@ eq_tau = (sx - sy)/2 * sp.sin(2*alpha) + txy * sp.cos(2*alpha)
 calc_sigma = sp.lambdify((sx, sy, txy, alpha), eq_sigma, 'numpy')
 calc_tau = sp.lambdify((sx, sy, txy, alpha), eq_tau, 'numpy')
 
-# 计算当前截面应力
 current_sigma = calc_sigma(val_sx, val_sy, val_txy, alpha_rad)
 current_tau = calc_tau(val_sx, val_sy, val_txy, alpha_rad)
 
-# 计算主应力与莫尔圆参数
 center_c = (val_sx + val_sy) / 2
 radius_r = np.sqrt(((val_sx - val_sy)/2)**2 + val_txy**2)
 sigma_1 = center_c + radius_r
@@ -65,41 +59,56 @@ tau_max = radius_r
 # ==========================================
 st.subheader("⭕ 数学空间：应力莫尔圆动态映射")
 
-# 为了手机端更好的视觉连贯性，将图表放在数据上方
-fig, ax = plt.subplots(figsize=(8, 6))
+# 创建现代化的交互式图表 (Plotly)
+fig = go.Figure()
 
-# 绘制莫尔圆
-circle = plt.Circle((center_c, 0), radius_r, color='#1f77b4', fill=False, linestyle='-', linewidth=2)
-ax.add_patch(circle)
+# 绘制莫尔圆骨架
+fig.add_shape(type="circle",
+    xref="x", yref="y",
+    x0=center_c - radius_r, y0=-radius_r,
+    x1=center_c + radius_r, y1=radius_r,
+    line_color="#1f77b4", line_width=2,
+)
 
-# 绘制坐标轴
-ax.axhline(0, color='black', linewidth=1.2)
-ax.axvline(0, color='black', linewidth=1.2)
+# 绘制当前截面状态点和红色半径线
+fig.add_trace(go.Scatter(
+    x=[center_c, current_sigma], 
+    y=[0, current_tau], 
+    mode='lines+markers',
+    line=dict(color='red', width=2),
+    marker=dict(color='red', size=8),
+    name=f'当前截面 (α={alpha_deg}°)',
+    hovertemplate='正应力: %{x:.1f} MPa<br>切应力: %{y:.1f} MPa<extra></extra>'
+))
 
-# 绘制动态映射点和半径线
-ax.plot(current_sigma, current_tau, 'ro', markersize=8, label=f'当前截面状态 (α={alpha_deg}°)')
-ax.plot([center_c, current_sigma], [0, current_tau], 'r-', linewidth=2)
+# 绘制主应力点 (绿色)
+fig.add_trace(go.Scatter(
+    x=[sigma_1, sigma_2], 
+    y=[0, 0], 
+    mode='markers',
+    marker=dict(color='green', size=8),
+    name='主应力 (σ1, σ3)',
+    hovertemplate='主应力: %{x:.1f} MPa<extra></extra>'
+))
 
-# 绘制主应力点
-ax.plot(sigma_1, 0, 'go', markersize=8, label='第一主应力 (σ1)')
-ax.plot(sigma_2, 0, 'go', markersize=8, label='第三主应力 (σ3)')
-
-# 图表格式化
-ax.set_aspect('equal', 'box')
-ax.set_xlabel('正应力, σ (MPa)', fontsize=12)
-ax.set_ylabel('切应力, τ (MPa)', fontsize=12)
-ax.set_title("材料力学应力莫尔圆 (Mohr's Circle)", fontsize=14, fontweight='bold')
-ax.legend(loc='upper right', fontsize=10)
-ax.grid(True, linestyle=':', alpha=0.7)
-
-# 自适应坐标轴范围，稍微留白避免图形贴边
+# 设置自适应坐标轴与中文图表布局
 max_val = max(abs(sigma_1), abs(sigma_2), radius_r) * 1.5
 if max_val == 0:
     max_val = 100
-ax.set_xlim(center_c - max_val, center_c + max_val)
-ax.set_ylim(-max_val, max_val)
 
-st.pyplot(fig)
+fig.update_layout(
+    xaxis_title="正应力, σ (MPa)",
+    yaxis_title="切应力, τ (MPa)",
+    xaxis=dict(range=[center_c - max_val, center_c + max_val], zeroline=True, zerolinecolor='black', showgrid=True),
+    # scaleanchor="x" 强制 X 轴和 Y 轴比例为 1:1，保证圆不会变成椭圆
+    yaxis=dict(range=[-max_val, max_val], zeroline=True, zerolinecolor='black', showgrid=True, scaleanchor="x", scaleratio=1),
+    legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99, bgcolor="rgba(255, 255, 255, 0.8)"),
+    margin=dict(l=20, r=20, t=30, b=20),
+    height=450,
+    hovermode="closest"
+)
+
+st.plotly_chart(fig, use_container_width=True)
 st.divider()
 
 # 核心数据展示区
@@ -112,4 +121,3 @@ with col_data1:
 with col_data2:
     st.subheader("⚠️ 结构安全边界")
     st.error(f"**第一主应力 (σ1)**: {sigma_1:.2f} MPa\n\n**第三主应力 (σ3)**: {sigma_2:.2f} MPa\n\n**最大切应力 (τmax)**: {tau_max:.2f} MPa")
-
